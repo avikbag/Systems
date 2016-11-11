@@ -1,0 +1,19 @@
+To compile:
+```
+make
+```
+
+To run server
+```
+cd server
+./server
+```
+
+To run client
+```
+cd client
+./client <chat room name>
+```
+The client on startup will print "Joined chat as user X" where X is it's user id.
+
+To send a private messages type "@<user id> message" and send.

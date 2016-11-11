@@ -1,0 +1,212 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{todonotes}
+\usepackage{listings}
+\usepackage[margin=1.0in]{geometry}
+
+\lstset{language=C} 
+
+\title{ECEC 353 Assignment 2}
+\author{William Fligor, Avik Bag}
+\date{July 2016}
+
+\begin{document}
+
+\maketitle
+
+\section{Design}
+\paragraph{}
+For this assignment, the aim is to implement a search mechanism using the concept of multi-threading. The idea is that the program will be given a few parameters, like number of threads, start directory, type of implementation and the string to be searched. There will be two forms of the implementation.
+\paragraph{}
+For the first part, the given directory will be traversed and a queue of all the files and folders will be in it. This queue will then be split up by the number of threads that are available. Each thread will be responsible for it's set of files/folders. If there is a folder, it will recursively go into them and list out all the available files, until all the files are listed in the queue. This implementation was definitely faster than a single thread implementation. But the issue that arises is that the threads are not getting an even distribution of the load. In other words, some threads might need to do more work than others. This is because certain threads might need to deal with folders recursively, causing the size of the queue to increase from it's assigned size. This implementation is called the static load balancing. The drawback of not being able to balance the load will be addressed in the next implementation of load balancing.
+
+\paragraph{}
+In this implementation, called the dynamic load balancing, every thread gets access to the global queue which contains all the files and folders. Every thread will make a blocking call to grab a value from the queue. There will be a mutex ensuring that only one thread will be making any modifications from the queue at any given time. This ensures that every thread will have some task to carry out, either recursively populating the queue from a folder or searching a file for the given string. One issue that came up was that when the queue was empty, a thread would exit, while another thread could have been in the processes of searching through folders and repopulating the queue. This would cause a loss in performance because now there will be lesser number of threads available. The way to tackle the performance issue was by keeping the threads on waiting even if the queue is empty, and also keep a track of all the waiting threads. If all the threads are on wait, this means that there is no more processing left and there was no way the queue was going to get any more new values, thus it meant that the process is over and all the threads can be stopped and joined in the main method. 
+
+\paragraph{}
+The implementations make use of a struct that makes it easier to pass multiple arguments to the function pointer when creating a thread. It is as shown below
+
+\begin{lstlisting}[frame=single]  % Start your code-block
+
+struct ThreadArgument {
+    int lock; // Bool to lock or not around queue
+    char *search_ptr;
+    queue_t *queue;
+    int thread_num;
+    int result;
+};
+\end{lstlisting}
+
+
+\begin{algorithm}
+\caption{Static Load Balancing}\label{euclid}
+\begin{algorithmic}[1]
+\STATE $num \gets NUM\_THREADS \text{ // No. of threads}$
+\STATE $queue \text{ // initialize queue }$
+\STATE $d \gets opendir(filePath) \text{ // Open directory and list file/folders}$
+\STATE $count = 0 \text{ // keep a track of the elements}$
+\IF{$d == valid$}
+    \WHILE{$dir = readdir(d)$}
+        \STATE $queue\_num \gets count mod NUM\_THREADS$
+        \IF{$dir->d\_name == "." || dir->d\_name == ".."$}
+            \STATE $continue$
+        \ENDIF
+        \STATE $Insert found file/directory into queue$
+        \STATE $count++$
+    \ENDWHILE
+    \STATE $closedir(d)$
+\ENDIF
+\STATE $threadArgs[NUM\_THREADS] \text{ // Used to initialize thread arguments}$
+\STATE $pthread[NUM\_THREADS] \text{ // Initializing threads}$
+\STATE $occurrences = 0 \text{ // Keeps a track of the times the search string was encountered}$
+\FOR{$i = 0 \to NUM\_THREADS-1$}
+    \STATE $threadArgs[i].lock \gets 0$
+    \STATE $threadArgs[i].search\_ptr \gets searchString$
+    \STATE $threadArgs[i].queue \gets queues$
+    \STATE $threadArgs[i].thread\_num \gets i$
+    \STATE ${pthread\_create(pthread[i], NULL, processQueueT, \&threadArgs[i])}$
+\ENDFOR
+\FOR{$i = 0 \to NUM\_THREADS-1$}
+    \STATE ${pthread\_join(pthread[i], NULL)}$
+    \STATE $occurrences \gets occurrences + threadArgs[i].result$
+\ENDFOR
+\STATE \text{return occurrences}
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{Dynamic Load Balancing}\label{euclid}
+\begin{algorithmic}[1]
+\STATE $num \gets NUM\_THREADS \text{ // No. of threads}$
+\STATE $queue \text{ // initialize queue}$ 
+\STATE $d \gets opendir(filePath) \text{ // Open directory and list file/folders}$
+\IF{$d == valid$}
+    \WHILE{$dir = readdir(d)$}
+        \IF{$dir->d\_name == "." || dir->d\_name == ".."$}
+            \STATE $continue$
+        \ENDIF
+        \STATE $element \gets create\_element(dir->d\_name)$
+        \STATE $insertElement(queue, element)$
+    \ENDWHILE
+    \STATE $closedir(d)$
+\ENDIF
+\STATE $threadArgs[NUM\_THREADS] \text{ // Used to initialize thread arguments}$
+\STATE $pthread[NUM\_THREADS] \text{ // Initializing threads}$
+\STATE $occurrences = 0 \text{ // Keeps a track of the times the search string was encountered}$
+\FOR{$i = 0 \to NUM\_THREADS-1$}
+    \STATE $threadArgs[i].lock \gets 1$
+    \STATE $threadArgs[i].search\_ptr \gets searchString$
+    \STATE $threadArgs[i].queue \gets queue$
+    \STATE $threadArgs[i].thread\_num \gets i$
+    \STATE ${pthread\_create(pthread[i], NULL, processQueueT, \&threadArgs[i])}$
+\ENDFOR
+\FOR{$i = 0 \to NUM\_THREADS-1$}
+    \STATE ${pthread\_join(pthread[i], NULL)}$
+    \STATE $occurrences \gets occurrences + threadArgs[i].result$
+\ENDFOR
+\STATE \text{return occurrences}
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+\caption{processQueueT}\label{euclid}
+\begin{algorithmic}[1]
+\STATE $num \gets NUM\_THREADS \text{ // No. of threads}$
+\STATE $thread\_status \gets 0$
+\STATE $count \gets 0$
+\WHILE{true}
+    \IF{$threadArgs.lock == 1$}
+        \STATE $pthread\_mutex\_lock(\&lock)$
+    \ENDIF
+    \IF{$queue \text{is empty}$}
+        \IF{$threadArgs.lock == 1$}
+            \IF{!thread\_status}
+                \STATE $wait\_count++$
+            \ENDIF
+            \STATE $thread\_status \gets 1$
+            \IF{$wait\_count == num$}
+                \STATE $pthread\_mutex\_unlock(\&lock)$
+                \STATE $break \text{ // Break when all threads are done}$ 
+            \ELSE
+                \STATE $pthread\_mutex\_unlock(\&lock)$
+                \STATE $continue$
+            \ENDIF
+        \ENDIF
+    \ENDIF
+    \IF{!thread\_status}
+        \STATE $wait\_count--$
+        \STATE $thread\_status \gets 0$
+    \ENDIF
+    \IF{$threadArgs.lock == 1$}
+        \STATE $pthread\_mutex\_lock(\&lock)$
+    \ENDIF
+    \STATE $element \gets getElement(queue)$
+    \IF{$threadArgs.lock == 1$}
+        \STATE $pthread\_mutex\_unlock(\&lock)$
+    \ENDIF
+    
+    \IF{$element == file$}
+        \STATE $\text{Read through file, increment count for every hit}$
+    \ENDIF
+    
+    \IF{$element == folder$}
+    \WHILE{$dir = readdir(element)$}
+        \IF{$dir->d\_name == "." || dir->d\_name == ".."$}
+            \STATE $continue$
+        \ENDIF
+        \STATE $element \gets create\_element(dir->d\_name)$
+        \IF{$threadArgs.lock == 1$}
+            \STATE $pthread\_mutex\_lock(\&lock)$
+        \ENDIF
+        \STATE $insertElement(queue, element)$
+        \IF{$threadArgs.lock == 1$}
+            \STATE $pthread\_mutex\_unlock(\&lock)$
+        \ENDIF
+    \ENDWHILE
+    \STATE $closedir(d)$
+\ENDIF
+\ENDWHILE
+\STATE \text{return count}
+\end{algorithmic}
+\end{algorithm}
+
+\clearpage
+
+\section{Speedup Statistics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|}
+        \hline
+        Threads & Real Time (s) & User Time (s) \\ \hline
+        1  & 0.643 & 0.269 \\ \hline
+        2  & 1.076 & 0.300 \\ \hline
+        4  & 0.784 & 0.323 \\ \hline
+        8  & 1.069 & 0.335 \\ \hline
+        16 & 0.639 & 0.241 \\ \hline
+    \end{tabular}
+    \caption{Run Times for Static implementation}
+    \label{tab:data}
+\end{table}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|}
+        \hline
+        Threads & Real Time (s) & User Time (s) \\ \hline
+        1  & 0.669 & 0.264 \\ \hline
+        2  & 0.396 & 0.285 \\ \hline
+        4  & 0.366 & 0.372 \\ \hline
+        8  & 0.335 & 0.365 \\ \hline
+        16 & 0.258 & 0.386 \\ \hline
+    \end{tabular}
+    \caption{Run Times for Dynamic implementation}
+    \label{tab:data}
+\end{table}
+
+
+
+\end{document}

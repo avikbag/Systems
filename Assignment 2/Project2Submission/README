@@ -1,0 +1,10 @@
+To build, 
+  make mini_grep
+
+To run, 
+  ./mini_grep <search_string> <destination directory> <number of threads> <dynamic/static>
+  example
+  ./mini_grep lui /home/DREXEL/mdl45/ 4 dynamic
+
+To remove build files,
+  make clean

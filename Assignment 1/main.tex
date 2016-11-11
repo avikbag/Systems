@@ -1,0 +1,86 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{todonotes}
+\usepackage{listings}
+\usepackage[margin=1.0in]{geometry}
+
+\lstset{language=C} 
+
+\title{ECEC 353 Assignment 1}
+\author{William Fligor, Avik Bag}
+\date{July 2016}
+
+\begin{document}
+
+\maketitle
+
+\section{Design}
+
+To implement the threaded design, the work to compute the area must be split up into the threads. This is done by sectioning off the left endpoint, right endpoint, and number of trapezoids into roughly even numbers per thread.
+
+\begin{algorithm}
+\caption{Separating Work}\label{euclid}
+\begin{algorithmic}[1]
+\STATE $a \gets 5 \text{ // Left Endpoint}$
+\STATE $b \gets 1000 \text{ // Right Endpoint}$
+\STATE $n \gets 100000000 \text{ // Number of Trapezoids}$
+\STATE $threads \gets 4$
+\STATE $trapezoidsPerThread = \frac{n}{threads}$
+\STATE $pointsPerThread = \frac{b - a}{threads}$
+\STATE $integral = 0 \text{ // Output}$
+\FOR{i:=0 \TO $threads$}
+    \STATE $start \gets a + pointsPerThread * i$
+    \STATE $end \gets start + pointsPerThread$
+    \IF{$i == NUM\_THREADS - 1$}
+        \STATE $end = b$
+    \ENDIF
+    \STATE $\text{Start thread}$
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+This algorithm splits up the work into NUM\_THREADS with almost equal amounts of work. The if statement inside the for loop ensures that if pointsPerThread does not divide evenly all of the work gets done. The function arguments are sent to compute\_gold using a struct, shown below.
+
+\begin{lstlisting}[frame=single]  % Start your code-block
+
+struct ThreadArgument {
+    int start;
+    int end;
+    int n;
+    float(*f)(float);
+    double result;
+};
+
+\end{lstlisting}
+
+The thread method calls compute\_gold by extracting the parameters through the struct. It then stores the result in the struct so the main thread can grab it. When the threads are joining, the individual results are summed up and returned as the result. 
+
+\section{Speedup Statistics}
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|l|}
+        \hline
+        Threads & Real Time (s) & User Time (s) \\ \hline
+        1  & 5.264 & 5.264 \\ \hline
+        2  & 2.754 & 5.399 \\ \hline
+        4  & 1.422 & 5.495 \\ \hline
+        8  & 0.774 & 5.783 \\ \hline
+        16 & 0.447 & 6.556 \\ \hline
+    \end{tabular}
+    \caption{Run Times}
+    \label{tab:data}
+\end{table}
+
+\paragraph{}
+For the timing part, the linux command time was used, for each instance of thread count. It shows us timings as user time, sys time and real time. The real time is essentially the time taken for the entire program to run from start to finish. On the other hand, the user time is the time that was spent outside the kernel mode, in other words, in user mode. For a quick overview, the kernel mode is where the code has complete access to the underlying hardware, where on the other hand, in the user mode the program will need to follow the rules set by the operating system to make use of the resources available. 
+
+\paragraph{}
+In the above data collected, we see that the user time remains more or less same, with a slight increase. However the so called real time keeps decreasing as we increase the number of threads that are being used. This makes sense as the work load is being distributed across the given number of threads. The more threads that are being used, the lesser computation each thread will need to complete, thus reducing the real time. One point to note is that the user time, the time spent in user mode, increases very slightly, and this maybe because of the overhead costs incurred due to the creation of new threads and sharing of resources. But this can be acceptable, even though the time spent in the user mode overall is more for all the threads combined, the net time spent, or the real time for the program is much lower, which is what we are aiming to achieve at the end of the day. 
+
+
+\end{document}
